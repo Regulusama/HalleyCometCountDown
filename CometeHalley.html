@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Comète de Halley — Compte à rebours 2061</title>
+  <meta name="description" content="Un simple site qui compte à rebours jusqu'au passage de la comète de Halley le 28 juillet 2061." />
+  <meta property="og:title" content="Comète de Halley — Compte à rebours 2061" />
+  <meta property="og:description" content="Combien de temps reste‑t‑il avant le 28 juillet 2061 ?" />
+  <meta property="og:type" content="website" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>☄️</text></svg>">
+  <style>
+    :root{--bg1:#0b1220;--bg2:#0f1b2d;--fg:#e6f0ff;--muted:#9bb2d1;--accent:#7dd3fc;--card:#111a2e;--glow:rgba(125,211,252,.25)}
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, "Helvetica Neue", Arial, "Apple Color Emoji","Segoe UI Emoji";
+      color:var(--fg);
+      background: radial-gradient(1200px 800px at 10% 10%, var(--bg2), var(--bg1)),
+                  radial-gradient(800px 600px at 90% 20%, #0b1b2e, transparent 70%),
+                  radial-gradient(600px 600px at 50% 100%, #0a1422, transparent 70%);
+      display:grid; place-items:center; padding:24px;
+    }
+    .container{max-width:1000px; width:100%;}
+    .card{
+      background:linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:24px; padding:28px; box-shadow:0 20px 60px rgba(0,0,0,.45), 0 0 60px var(--glow);
+      backdrop-filter: blur(6px);
+    }
+    header{display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap}
+    .title{display:flex; gap:12px; align-items:center}
+    .title .emoji{font-size:36px}
+    h1{font-size:clamp(22px, 3.2vw, 34px); margin:0}
+    p{margin:0}
+    .muted{color:var(--muted)}
+    .countdown{display:grid; grid-template-columns: repeat(4, minmax(120px,1fr)); gap:16px; margin-top:28px}
+    .unit{background:var(--card); border:1px solid rgba(255,255,255,.08); border-radius:20px; padding:20px; text-align:center; position:relative}
+    .value{font-variant-numeric: tabular-nums; font-size: clamp(36px, 7vw, 72px); font-weight:700; letter-spacing:1px}
+    .label{margin-top:6px; font-size:14px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)}
+    .meta{display:flex; gap:12px; align-items:center; justify-content:space-between; margin-top:18px; flex-wrap:wrap}
+    .chip{border:1px solid rgba(255,255,255,.12); border-radius:999px; padding:6px 12px; font-size:14px; color:var(--muted)}
+    .foot{margin-top:16px; font-size:13px; color:var(--muted)}
+    .sr-only{position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0}
+
+    @media (max-width:690px){
+      .countdown{grid-template-columns: repeat(2, 1fr)}
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card" role="region" aria-labelledby="titre">
+      <header>
+        <div class="title">
+          <div class="emoji" aria-hidden="true">☄️</div>
+          <div>
+            <h1 id="titre">Comète de Halley — Compte à rebours</h1>
+            <p id="targetText" class="muted">Prochain passage : <span data-target-date></span></p>
+          </div>
+        </div>
+        <div class="chip" id="tz">Fuseau : <span data-tz></span></div>
+      </header>
+
+      <div class="countdown" aria-live="polite" aria-atomic="true">
+        <div class="unit"><div class="value" id="days">—</div><div class="label">Jours</div></div>
+        <div class="unit"><div class="value" id="hours">—</div><div class="label">Heures</div></div>
+        <div class="unit"><div class="value" id="minutes">—</div><div class="label">Minutes</div></div>
+        <div class="unit"><div class="value" id="seconds">—</div><div class="label">Secondes</div></div>
+      </div>
+
+      <div class="meta">
+        <div class="chip" id="progressChip">Progression: <span id="progress">0.000%</span></div>
+        <button id="copyBtn" class="chip" type="button" title="Copier l'URL du site">Copier l’URL</button>
+      </div>
+
+      <p class="foot">Le compte à rebours utilise l’heure locale de votre navigateur. Vous pouvez modifier la date via le paramètre d’URL <code>?date=YYYY-MM-DDTHH:mm:ssZ</code> si besoin.</p>
+    </div>
+  </div>
+
+  <span class="sr-only" id="a11yStatus" aria-live="polite"></span>
+
+  <script>
+    (function(){
+      // 1) Déterminer la cible depuis l'URL ou utiliser par défaut le 28 juillet 2061 (00:00 locale)
+      const url = new URL(window.location.href);
+      const custom = url.searchParams.get('date');
+      const defaultLocalMidnight = new Date(2061, 6, 28, 0, 0, 0, 0); // mois 6 = juillet
+      let target = custom ? new Date(custom) : defaultLocalMidnight;
+
+      if (isNaN(target.getTime())) target = defaultLocalMidnight; // sécurité
+
+      const targetSpan = document.querySelector('[data-target-date]');
+      const tzSpan = document.querySelector('[data-tz]');
+      const a11y = document.getElementById('a11yStatus');
+
+      // Afficher la date cible de manière locale
+      const fmt = new Intl.DateTimeFormat(navigator.language || 'fr-FR', {
+        dateStyle: 'full', timeStyle: 'long'
+      });
+      targetSpan.textContent = fmt.format(target);
+
+      // Afficher le fuseau
+      try{
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local';
+        tzSpan.textContent = tz;
+      }catch(e){ tzSpan.textContent = 'Local'; }
+
+      // 2) Mettre à jour le compte à rebours chaque seconde
+      const el = {
+        days: document.getElementById('days'),
+        hours: document.getElementById('hours'),
+        minutes: document.getElementById('minutes'),
+        seconds: document.getElementById('seconds'),
+        progress: document.getElementById('progress'),
+        progressChip: document.getElementById('progressChip'),
+      };
+
+      // Progression depuis aujourd'hui jusqu'à la date cible (pour le fun)
+      const startOfToday = new Date();
+      const start = startOfToday.getTime();
+      const end = target.getTime();
+
+      function two(n){ return String(n).padStart(2,'0'); }
+
+      function tick(){
+        const now = new Date();
+        const diff = target - now;
+
+        if (diff <= 0){
+          el.days.textContent = '0';
+          el.hours.textContent = '00';
+          el.minutes.textContent = '00';
+          el.seconds.textContent = '00';
+          document.title = '☄️ Halley est là !';
+          a11y.textContent = 'La comète de Halley est arrivée !';
+          return;
+        }
+
+        const totalSeconds = Math.floor(diff/1000);
+        const days = Math.floor(totalSeconds / 86400);
+        const hours = Math.floor((totalSeconds % 86400) / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+
+        el.days.textContent = days.toLocaleString();
+        el.hours.textContent = two(hours);
+        el.minutes.textContent = two(minutes);
+        el.seconds.textContent = two(seconds);
+
+        // Mettre à jour le titre pour un petit effet "live"
+        document.title = `J-${days} ${two(hours)}:${two(minutes)}:${two(seconds)} — Halley 2061`;
+
+        // Progression (0% -> 100% du temps écoulé entre maintenant et la cible)
+        const prog = Math.max(0, Math.min(1, (now.getTime() - start) / (end - start)));
+        el.progress.textContent = (prog * 100).toFixed(3) + '%';
+      }
+
+      tick();
+      setInterval(tick, 1000);
+
+      // 3) Bouton pour copier l'URL
+      const copyBtn = document.getElementById('copyBtn');
+      copyBtn.addEventListener('click', async () => {
+        try{
+          await navigator.clipboard.writeText(window.location.href);
+          copyBtn.textContent = 'Lien copié ✔';
+          setTimeout(()=> copyBtn.textContent = 'Copier l’URL', 2000);
+        }catch{
+          copyBtn.textContent = 'Impossible de copier';
+          setTimeout(()=> copyBtn.textContent = 'Copier l’URL', 2000);
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
